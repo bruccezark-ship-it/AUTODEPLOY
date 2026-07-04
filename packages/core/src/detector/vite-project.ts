@@ -2,6 +2,13 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
+const VITE_CONFIG_FILES = [
+  'vite.config.ts',
+  'vite.config.js',
+  'vite.config.mjs',
+  'vite.config.cjs',
+] as const;
+
 export interface ViteProjectInfo {
   name: string;
   version: string;
@@ -30,9 +37,10 @@ export async function detectViteProject(projectRoot: string): Promise<ViteProjec
     devDependencies?: Record<string, string>;
   };
 
-  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-  if (!deps.vite) {
-    throw new ProjectError('当前项目不是 Vite 项目（package.json 中未找到 vite 依赖）');
+  if (!isViteProject(projectRoot, pkg)) {
+    throw new ProjectError(
+      '当前项目不是 Vite 项目（未找到 vite 依赖、vite.config 或 node_modules 中的 vite 包；pnpm workspace 子项目请确认存在 vite.config 且已 pnpm install）',
+    );
   }
 
   const outDir = await resolveOutDir(projectRoot);
@@ -53,14 +61,7 @@ export async function resolveOutDir(
     return join(projectRoot, projectOutputDir);
   }
 
-  const viteConfigPaths = [
-    'vite.config.ts',
-    'vite.config.js',
-    'vite.config.mjs',
-    'vite.config.cjs',
-  ];
-
-  for (const configFile of viteConfigPaths) {
+  for (const configFile of VITE_CONFIG_FILES) {
     const configPath = join(projectRoot, configFile);
     if (!existsSync(configPath)) continue;
 
@@ -72,4 +73,32 @@ export async function resolveOutDir(
   }
 
   return join(projectRoot, 'dist');
+}
+
+type PackageJson = {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+
+function hasViteConfig(projectRoot: string): boolean {
+  return VITE_CONFIG_FILES.some((configFile) =>
+    existsSync(join(projectRoot, configFile)),
+  );
+}
+
+function hasViteDependency(pkg: PackageJson): boolean {
+  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  return Boolean(deps.vite);
+}
+
+function canResolveVite(projectRoot: string): boolean {
+  return existsSync(join(projectRoot, 'node_modules', 'vite', 'package.json'));
+}
+
+function isViteProject(projectRoot: string, pkg: PackageJson): boolean {
+  return (
+    hasViteDependency(pkg) ||
+    hasViteConfig(projectRoot) ||
+    canResolveVite(projectRoot)
+  );
 }
