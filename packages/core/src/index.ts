@@ -10,4 +10,5 @@ export * from './cdn/cdn-manager.js';
 export * from './cdn/txt-dns-check.js';
 export * from './dns/dns-manager.js';
 export * from './orchestrator/deploy.js';
+export * from './orchestrator/undeploy.js';
 export * from './utils/retry.js';

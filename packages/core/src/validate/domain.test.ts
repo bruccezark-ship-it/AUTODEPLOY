@@ -9,6 +9,7 @@ import {
   getRootDomain,
   expandCdnDomains,
   resolveDeployPlan,
+  resolveCosPrefixFromDomain,
 } from './domain.js';
 
 describe('validateDomain', () => {
@@ -74,6 +75,26 @@ describe('resolveSubdomainTarget', () => {
 describe('buildCosPrefixFromKey', () => {
   it('builds cos prefix with trailing slash', () => {
     expect(buildCosPrefixFromKey('sites', 'my-app')).toBe('sites/my-app/');
+  });
+});
+
+describe('resolveCosPrefixFromDomain', () => {
+  it('uses root prefix for apex and www domains', () => {
+    expect(resolveCosPrefixFromDomain('hbshibo.com', 'aigo1.cloud', 'sites')).toEqual({
+      cosPrefix: 'sites/hbshibo-com/',
+      sharedDomains: ['hbshibo.com', 'www.hbshibo.com'],
+    });
+    expect(resolveCosPrefixFromDomain('www.hbshibo.com', 'aigo1.cloud', 'sites')).toEqual({
+      cosPrefix: 'sites/hbshibo-com/',
+      sharedDomains: ['hbshibo.com', 'www.hbshibo.com'],
+    });
+  });
+
+  it('uses subdomain prefix for managed subdomain', () => {
+    expect(resolveCosPrefixFromDomain('wocao.aigo1.cloud', 'aigo1.cloud', 'sites')).toEqual({
+      cosPrefix: 'sites/wocao/',
+      sharedDomains: ['wocao.aigo1.cloud'],
+    });
   });
 });
 

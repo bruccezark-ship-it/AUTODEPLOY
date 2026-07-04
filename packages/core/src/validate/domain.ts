@@ -134,6 +134,28 @@ export function resolveDeployPlan(
   };
 }
 
+export function resolveCosPrefixFromDomain(
+  domain: string,
+  baseDomain: string,
+  cosPrefixBase: string,
+): { cosPrefix: string; sharedDomains: string[] } {
+  const normalized = normalizeDomain(domain);
+  const root = getRootDomain(normalized);
+
+  if (normalized === root || normalized === `www.${root}`) {
+    return {
+      cosPrefix: buildCosPrefixFromKey(cosPrefixBase, root.replace(/\./g, '-')),
+      sharedDomains: expandCdnDomains(root),
+    };
+  }
+
+  const target = parseFullDomain(normalized, baseDomain);
+  return {
+    cosPrefix: buildCosPrefixFromKey(cosPrefixBase, target.cosKey),
+    sharedDomains: [normalized],
+  };
+}
+
 export function resolveSubdomainTarget(subdomain: string, baseDomain: string): DeployTarget {
   const normalizedSub = subdomain.trim().toLowerCase();
   return {

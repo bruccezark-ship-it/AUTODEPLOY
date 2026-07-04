@@ -187,6 +187,35 @@ export async function ensureCnameRecord(options: DnsSetupOptions): Promise<DnsSe
   return { action: 'created', recordId: result.RecordId };
 }
 
+export interface DnsRemoveResult {
+  action: 'deleted' | 'not_found' | 'skipped';
+  recordId?: number;
+  reason?: string;
+}
+
+export async function removeCnameRecord(options: {
+  subdomain: string;
+  config: GlobalConfig;
+}): Promise<DnsRemoveResult> {
+  const { subdomain, config } = options;
+  const client = createDnsClient(config);
+  const domain = config.dns.domain;
+
+  const existing = await findCnameRecord(client, domain, subdomain);
+  if (!existing?.RecordId) {
+    return { action: 'not_found' };
+  }
+
+  await retry(() =>
+    client.DeleteRecord({
+      Domain: domain,
+      RecordId: existing.RecordId!,
+    }),
+  );
+
+  return { action: 'deleted', recordId: existing.RecordId };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

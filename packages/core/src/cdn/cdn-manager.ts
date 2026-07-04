@@ -279,6 +279,32 @@ export async function purgeCdnCache(
   await retry(() => client.PurgeUrlsCache({ Urls: urls }));
 }
 
+export async function isCdnDomainExists(config: GlobalConfig, domain: string): Promise<boolean> {
+  const client = createCdnClient(config);
+  const existing = await findDomain(client, domain);
+  return !!existing;
+}
+
+export async function removeCdnDomain(
+  config: GlobalConfig,
+  domain: string,
+): Promise<'removed' | 'not_found'> {
+  const client = createCdnClient(config);
+  const existing = await findDomain(client, domain);
+  if (!existing) {
+    return 'not_found';
+  }
+
+  try {
+    await retry(() => client.StopCdnDomain({ Domain: domain }));
+  } catch {
+    // 域名可能已处于关闭状态
+  }
+
+  await retry(() => client.DeleteCdnDomain({ Domain: domain }));
+  return 'removed';
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

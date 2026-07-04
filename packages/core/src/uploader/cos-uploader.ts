@@ -175,3 +175,27 @@ export async function uploadDirectory(options: UploadOptions): Promise<UploadRes
 
   return { uploaded, skipped, deleted, totalBytes };
 }
+
+export async function deletePrefix(
+  config: GlobalConfig,
+  prefix: string,
+): Promise<{ deleted: number }> {
+  const cos = createCosClient(config);
+  const { bucket } = config.cos;
+  const { region } = config.tencent;
+  const remoteMap = await listRemoteObjects(cos, bucket, region, prefix);
+
+  let deleted = 0;
+  for (const key of remoteMap.keys()) {
+    await retry(() =>
+      cos.deleteObject({
+        Bucket: bucket,
+        Region: region,
+        Key: key,
+      }),
+    );
+    deleted++;
+  }
+
+  return { deleted };
+}
