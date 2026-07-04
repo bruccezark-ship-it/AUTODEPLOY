@@ -27,22 +27,7 @@ export async function deploy(
     `构建完成 (${formatDuration(buildResult.duration)}, ${buildResult.fileCount} files)`,
   );
 
-  options.onStepStart?.(2, TOTAL_STEPS, '上传至 COS');
-  await ensureBucketWebsite(config);
-  const uploadResult = await uploadDirectory({
-    localDir: outDir,
-    remotePrefix: cosPrefix,
-    config,
-    clean,
-  });
-  options.onStepComplete?.(
-    2,
-    TOTAL_STEPS,
-    '上传至 COS',
-    `上传完成 (${uploadResult.uploaded} 新文件, ${uploadResult.skipped} 跳过, ${formatBytes(uploadResult.totalBytes)})`,
-  );
-
-  options.onStepStart?.(3, TOTAL_STEPS, '配置 CDN');
+  options.onStepStart?.(2, TOTAL_STEPS, '配置 CDN');
   const cosOriginPath = `/${cosPrefix.replace(/\/$/, '')}`;
   const cdnEntries = [];
 
@@ -65,9 +50,9 @@ export async function deploy(
   const cdnSummary = cdnEntries
     .map(({ domain, created }) => `${domain}${created ? ' (新建)' : ''}`)
     .join(', ');
-  options.onStepComplete?.(3, TOTAL_STEPS, '配置 CDN', `CDN 域名已就绪: ${cdnSummary}`);
+  options.onStepComplete?.(2, TOTAL_STEPS, '配置 CDN', `CDN 域名已就绪: ${cdnSummary}`);
 
-  options.onStepStart?.(4, TOTAL_STEPS, '配置 DNS 解析');
+  options.onStepStart?.(3, TOTAL_STEPS, '配置 DNS 解析');
   const dnsMessages: string[] = [];
 
   for (let i = 0; i < domains.length; i++) {
@@ -93,7 +78,22 @@ export async function deploy(
     );
   }
 
-  options.onStepComplete?.(4, TOTAL_STEPS, '配置 DNS 解析', dnsMessages.join('; '));
+  options.onStepComplete?.(3, TOTAL_STEPS, '配置 DNS 解析', dnsMessages.join('; '));
+
+  options.onStepStart?.(4, TOTAL_STEPS, '上传至 COS');
+  await ensureBucketWebsite(config);
+  const uploadResult = await uploadDirectory({
+    localDir: outDir,
+    remotePrefix: cosPrefix,
+    config,
+    clean,
+  });
+  options.onStepComplete?.(
+    4,
+    TOTAL_STEPS,
+    '上传至 COS',
+    `上传完成 (${uploadResult.uploaded} 新文件, ${uploadResult.skipped} 跳过, ${formatBytes(uploadResult.totalBytes)})`,
+  );
 
   const protocol = config.domain.protocol;
   const purgeUrls = domains.flatMap((entry) => [

@@ -263,7 +263,7 @@ export async function runDeployCommand(options: DeployCommandOptions): Promise<v
         onCdnVerificationRequired: options.yes
           ? undefined
           : async (verificationCtx) => {
-              spinners.get(3)?.stop();
+              spinners.get(2)?.stop();
               await runCdnVerificationFlow(verificationCtx);
             },
         onStepStart: (step, total, name) => {
