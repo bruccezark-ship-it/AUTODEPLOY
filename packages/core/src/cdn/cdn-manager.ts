@@ -71,7 +71,7 @@ function buildOriginConfig(config: GlobalConfig, basePath?: string) {
     OriginType: 'cos',
     ServerName: origin,
     CosPrivateAccess: 'off',
-    OriginPullProtocol: 'http',
+    OriginPullProtocol: 'follow',
     ...(basePath ? { BasePath: basePath.replace(/\/$/, '') } : {}),
   };
 }
