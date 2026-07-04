@@ -1,0 +1,36 @@
+{
+  "name": "@autodeploy/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "setup-bucket": "tsx scripts/setup-bucket.ts"
+  },
+  "dependencies": {
+    "cos-nodejs-sdk-v5": "^2.14.6",
+    "cosmiconfig": "^9.0.0",
+    "execa": "^9.5.2",
+    "fast-glob": "^3.3.3",
+    "mime-types": "^2.1.35",
+    "tencentcloud-sdk-nodejs": "^4.0.938",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/mime-types": "^2.1.4",
+    "@types/node": "^20.17.16",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

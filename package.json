@@ -1,0 +1,15 @@
+{
+  "name": "autodeploy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @autodeploy/cli dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "setup-bucket": "pnpm --filter @autodeploy/core setup-bucket"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@autodeploy/cli",
+  "version": "0.1.0",
+  "description": "Vite 项目一键发布至腾讯云 COS，自动配置 CDN 与 DNS",
+  "type": "module",
+  "bin": {
+    "deploy": "./bin/deploy.js"
+  },
+  "files": ["bin", "dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@autodeploy/core": "workspace:*",
+    "@inquirer/prompts": "^7.3.2",
+    "chalk": "^5.4.1",
+    "commander": "^12.1.0",
+    "ora": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.16",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
