@@ -15,6 +15,7 @@ import {
   enrichDeployPlanDns,
   getDnsZoneDetails,
   getRootDomain,
+  areAllCdnDomainsConfigured,
   ConfigError,
   ProjectError,
   CdnVerificationError,
@@ -205,6 +206,24 @@ export async function runDeployCommand(options: DeployCommandOptions): Promise<v
 
   plan = await enrichAndPrintDnsStatus(plan, config);
 
+  let skipCdnAndDns = false;
+  try {
+    skipCdnAndDns = await areAllCdnDomainsConfigured(
+      config,
+      plan.domains.map((entry) => entry.fullDomain),
+    );
+    if (skipCdnAndDns) {
+      console.log(
+        chalk.cyan(
+          `✔ 加速域名 ${plan.domains.map((entry) => entry.fullDomain).join(', ')} 已在 CDN 中，将跳过 CDN/DNS 配置，仅上传 COS`,
+        ),
+      );
+      console.log();
+    }
+  } catch {
+    // CDN 查询失败时走完整发布流程
+  }
+
   if (!options.yes) {
     const settings = await promptDeploySettings({
       protocol: config.domain.protocol,
@@ -260,7 +279,8 @@ export async function runDeployCommand(options: DeployCommandOptions): Promise<v
       },
       {
         noClean: options.noClean,
-        onCdnVerificationRequired: options.yes
+        skipCdnAndDns,
+        onCdnVerificationRequired: options.yes || skipCdnAndDns
           ? undefined
           : async (verificationCtx) => {
               spinners.get(2)?.stop();

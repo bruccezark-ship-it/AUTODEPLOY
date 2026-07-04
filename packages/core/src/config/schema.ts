@@ -77,6 +77,8 @@ import type { CdnVerificationHandler } from '../cdn/cdn-manager.js';
 
 export interface DeployOptions {
   noClean?: boolean;
+  /** 加速域名均已存在于 CDN 时，跳过 CDN 配置与 DNS 解析 */
+  skipCdnAndDns?: boolean;
   onStepStart?: (step: number, total: number, name: string) => void;
   onStepComplete?: (step: number, total: number, name: string, message: string) => void;
   onCdnVerificationRequired?: CdnVerificationHandler;

@@ -335,6 +335,46 @@ export async function isCdnDomainExists(config: GlobalConfig, domain: string): P
   return !!existing;
 }
 
+export async function areAllCdnDomainsConfigured(
+  config: GlobalConfig,
+  domains: string[],
+): Promise<boolean> {
+  if (domains.length === 0) {
+    return false;
+  }
+
+  for (const domain of domains) {
+    if (!(await isCdnDomainExists(config, domain))) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export async function resolveExistingCdnEntries(
+  config: GlobalConfig,
+  domains: string[],
+): Promise<Array<{ domain: string; cname: string; created: boolean }>> {
+  const client = createCdnClient(config);
+  const entries = [];
+
+  for (const domain of domains) {
+    const existing = await findDomain(client, domain);
+    if (!existing) {
+      throw new Error(`CDN 加速域名不存在: ${domain}`);
+    }
+
+    entries.push({
+      domain,
+      cname: existing.Cname ?? `${domain}.cdn.dnsv1.com`,
+      created: false,
+    });
+  }
+
+  return entries;
+}
+
 export async function removeCdnDomain(
   config: GlobalConfig,
   domain: string,
