@@ -9,7 +9,8 @@ Vite 项目一键发布至腾讯云 COS，自动配置 CDN 与 DNS 解析。
 - 自动配置 DNSPod CNAME 解析（托管域名）
 - 交互式选择访问协议（HTTP/HTTPS）与 CDN HTTPS 开关
 - 支持子域名、完整域名发布；根域名自动同时部署 `example.com` 与 `www.example.com`
-- 外部域名 CDN 归属验证（交互式 TXT 记录指引）
+- 域名在 DNSPod 账户下时，自动完成 CDN TXT 归属验证与 DNS 解析
+- 域名不在账户下时，交互式 CDN 归属验证（TXT 记录指引）
 - 一键下线：删除 CDN、DNS 解析与 COS 资源
 
 ## 快速开始
@@ -55,6 +56,14 @@ export AUTODEPLOY_COS_BUCKET=static-sites-1250000000
 export AUTODEPLOY_COS_PREFIX=sites
 export AUTODEPLOY_BASE_DOMAIN=example.com
 ```
+
+**子账号权限（CAM）：** 若域名已在 DNSPod 账户下，需授予 COS、CDN、DNSPod 相关权限以实现全自动 TXT 验证。可直接导入 [docs/cam-policy.example.json](docs/cam-policy.example.json)，或在 CAM 控制台为子用户关联同名自定义策略。
+
+| 服务 | 自动 TXT 验证所需 Action |
+|------|-------------------------|
+| DNSPod | `DescribeDomain`、`DescribeRecordList`、`CreateRecord`、`ModifyRecord` |
+| CDN | `CreateVerifyRecord`、`VerifyDomainRecord`、`AddCdnDomain` |
+| COS | `PutObject`、`GetObject` 等（上传静态文件） |
 
 ### 3. 初始化 COS 存储桶（首次）
 

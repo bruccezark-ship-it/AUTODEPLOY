@@ -1,8 +1,8 @@
 import type { GlobalConfig } from '../config/schema.js';
 import { isCdnDomainExists, removeCdnDomain } from '../cdn/cdn-manager.js';
-import { removeCnameRecord } from '../dns/dns-manager.js';
+import { removeCnameRecord, resolveDnsTargetForDomain } from '../dns/dns-manager.js';
 import { deletePrefix } from '../uploader/cos-uploader.js';
-import { normalizeDomain, parseFullDomain, resolveCosPrefixFromDomain } from '../validate/domain.js';
+import { normalizeDomain, resolveCosPrefixFromDomain } from '../validate/domain.js';
 
 export interface UndeployContext {
   domain: string;
@@ -56,7 +56,7 @@ export async function undeploy(
     config.domain.baseDomain,
     config.cos.prefix,
   );
-  const dnsTarget = parseFullDomain(domain, config.domain.baseDomain);
+  const dnsTarget = await resolveDnsTargetForDomain(domain, config);
 
   options.onStepStart?.(1, TOTAL_STEPS, '下线 CDN 域名');
   const cdnStatus = await removeCdnDomain(config, domain);
@@ -71,12 +71,13 @@ export async function undeploy(
   let dnsSkipReason: string | undefined;
 
   if (!dnsTarget.managedDns) {
-    dnsSkipReason = `域名 ${domain} 不在 ${config.dns.domain} 下，请手动清理 DNS 解析`;
+    dnsSkipReason = `域名 ${domain} 不在当前腾讯云 DNSPod 账户下，请手动清理 DNS 解析`;
     options.onStepComplete?.(2, TOTAL_STEPS, '清除 DNS 解析', dnsSkipReason);
   } else {
     const dnsResult = await removeCnameRecord({
       subdomain: dnsTarget.dnsHost,
       config,
+      dnsZone: dnsTarget.dnsZone,
     });
     const dnsLabel = dnsTarget.dnsHost === '@' ? '@' : dnsTarget.dnsHost;
     if (dnsResult.action === 'deleted') {

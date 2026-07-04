@@ -52,6 +52,7 @@ export async function deploy(
       cosOriginPath,
       config,
       managedDns: entry.managedDns,
+      dnsZone: entry.dnsZone,
       onVerificationRequired: options.onCdnVerificationRequired,
     });
     cdnEntries.push({
@@ -82,6 +83,7 @@ export async function deploy(
       subdomain: entry.dnsHost,
       cnameTarget: cdnEntry.cname,
       config,
+      dnsZone: entry.dnsZone,
     });
     const dnsLabel = entry.dnsHost === '@' ? '@' : entry.dnsHost;
     dnsMessages.push(

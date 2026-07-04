@@ -49,11 +49,11 @@ export async function promptDeployTarget(
   });
 
   const plan = resolveDeployPlan(fullDomainInput, baseDomain, cosPrefixBase);
-  printDeployPlanHints(fullDomainInput, plan, baseDomain);
+  printDeployPlanHints(fullDomainInput, plan);
   return plan;
 }
 
-function printDeployPlanHints(inputDomain: string, plan: DeployPlan, baseDomain: string) {
+function printDeployPlanHints(inputDomain: string, plan: DeployPlan) {
   const expanded = expandCdnDomains(normalizeDomain(inputDomain));
 
   if (expanded.length > 1) {
@@ -61,12 +61,6 @@ function printDeployPlanHints(inputDomain: string, plan: DeployPlan, baseDomain:
       chalk.cyan(`  将同时配置 CDN 加速域名: ${expanded.join(' 与 ')}`),
     );
     console.log(chalk.dim('  两个域名指向同一 COS 资源'));
-  }
-
-  if (plan.domains.some((entry) => !entry.managedDns)) {
-    console.log(
-      chalk.yellow(`  提示: 部分域名不在 ${baseDomain} 下，DNS 需手动配置 CNAME`),
-    );
   }
 }
 

@@ -1,0 +1,47 @@
+{
+  "version": "2.0",
+  "statement": [
+    {
+      "effect": "allow",
+      "action": [
+        "cos:PutObject",
+        "cos:GetObject",
+        "cos:DeleteObject",
+        "cos:GetBucket",
+        "cos:PutBucketWebsite",
+        "cos:GetBucketWebsite"
+      ],
+      "resource": "*"
+    },
+    {
+      "effect": "allow",
+      "action": [
+        "cdn:AddCdnDomain",
+        "cdn:UpdateDomainConfig",
+        "cdn:DescribeDomains",
+        "cdn:DescribeDomainsConfig",
+        "cdn:CreateVerifyRecord",
+        "cdn:VerifyDomainRecord",
+        "cdn:StopCdnDomain",
+        "cdn:DeleteCdnDomain",
+        "cdn:PurgeUrlsCache"
+      ],
+      "resource": "*"
+    },
+    {
+      "effect": "allow",
+      "action": [
+        "dnspod:DescribeDomain",
+        "dnspod:DescribeDomainList",
+        "dnspod:DescribeRecordLineList",
+        "dnspod:DescribeRecordList",
+        "dnspod:CreateRecord",
+        "dnspod:CreateTXTRecord",
+        "dnspod:ModifyRecord",
+        "dnspod:ModifyTXTRecord",
+        "dnspod:DeleteRecord"
+      ],
+      "resource": "*"
+    }
+  ]
+}

@@ -88,6 +88,9 @@ export function buildCosPrefixFromKey(prefix: string, cosKey: string): string {
 export interface DeployDomainEntry {
   fullDomain: string;
   dnsHost: string;
+  /** DNSPod 解析区域（根域名） */
+  dnsZone?: string;
+  /** 是否可在当前腾讯云账户下自动配置 DNS 与 CDN 归属验证 */
   managedDns: boolean;
 }
 
@@ -213,6 +216,23 @@ export function getRootDomain(domain: string): string {
   }
 
   return lastTwo;
+}
+
+/** 根据 DNSPod 解析区域计算主机记录 */
+export function computeDnsHost(fullDomain: string, dnsZone: string): string {
+  const full = normalizeDomain(fullDomain);
+  const zone = normalizeDomain(dnsZone);
+
+  if (full === zone) {
+    return '@';
+  }
+
+  const suffix = `.${zone}`;
+  if (full.endsWith(suffix)) {
+    return full.slice(0, -suffix.length);
+  }
+
+  throw new Error(`域名 ${full} 不属于解析区域 ${zone}`);
 }
 
 /**

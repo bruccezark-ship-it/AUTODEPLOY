@@ -12,6 +12,9 @@ import {
   resolveSubdomainPlan,
   expandCdnDomains,
   normalizeDomain,
+  enrichDeployPlanDns,
+  getDnsZoneDetails,
+  getRootDomain,
   ConfigError,
   ProjectError,
   CdnVerificationError,
@@ -55,6 +58,83 @@ function printPlanInfo(plan: DeployPlan, inputDomain: string | undefined, protoc
   console.log(chalk.dim(`  访问地址: ${chalk.cyan(summary.urls)}`));
   console.log(chalk.dim(`  加速域名: ${chalk.cyan(summary.cdnDomains)}`));
   console.log(chalk.dim(`  COS 上传路径: ${chalk.cyan(summary.cosPrefix)}`));
+}
+
+async function enrichAndPrintDnsStatus(
+  plan: DeployPlan,
+  config: Awaited<ReturnType<typeof loadDeployConfig>>,
+): Promise<DeployPlan> {
+  const spinner = ora('检测域名是否在当前腾讯云账户下...').start();
+
+  try {
+    const enriched = await enrichDeployPlanDns(plan, config);
+    spinner.stop();
+
+    const seenZones = new Set<string>();
+    for (const entry of enriched.domains) {
+      const zoneKey = entry.dnsZone ?? entry.fullDomain;
+      if (seenZones.has(zoneKey)) continue;
+      seenZones.add(zoneKey);
+
+      const details = await getDnsZoneDetails(config, zoneKey);
+
+      if (details.inAccount && details.effective) {
+        console.log(
+          chalk.green(
+            `✔ 解析区域 ${entry.dnsZone} 已在 DNSPod 账户且 NS 已生效，将自动完成 CDN 归属验证与 DNS 解析`,
+          ),
+        );
+      } else if (details.inAccount) {
+        console.log(
+          chalk.yellow(
+            `! 解析区域 ${entry.dnsZone} 在 DNSPod 账户中，但 NS 未指向 DNSPod，需手动配置 TXT/CNAME`,
+          ),
+        );
+        if (details.actualNs.length > 0) {
+          console.log(chalk.dim(`  当前 NS: ${details.actualNs.join(', ')}`));
+        }
+        if (details.dnspodNs.length > 0) {
+          console.log(chalk.dim(`  DNSPod NS: ${details.dnspodNs.join(', ')}`));
+        }
+      } else {
+        console.log(
+          chalk.yellow(
+            `! 解析区域 ${entry.dnsZone} 不在当前账户下，需手动完成 CDN 归属验证与 DNS 配置`,
+          ),
+        );
+      }
+    }
+
+    console.log();
+    return enriched;
+  } catch (error) {
+    spinner.warn('域名账户检测失败，将按外部域名处理（需手动 CDN 验证）');
+    const message = error instanceof Error ? error.message : String(error);
+    if (message) {
+      console.log(chalk.dim(`  ${message}`));
+    }
+
+    const fallbackPlan: DeployPlan = {
+      ...plan,
+      domains: plan.domains.map((entry) => ({
+        ...entry,
+        managedDns: false,
+        dnsZone: getRootDomain(entry.fullDomain),
+        dnsHost: entry.fullDomain,
+      })),
+    };
+
+    for (const entry of fallbackPlan.domains) {
+      console.log(
+        chalk.yellow(
+          `! 解析区域 ${entry.dnsZone} 不在当前账户下，需手动完成 CDN 归属验证与 DNS 配置`,
+        ),
+      );
+    }
+
+    console.log();
+    return fallbackPlan;
+  }
 }
 
 export async function runDeployCommand(options: DeployCommandOptions): Promise<void> {
@@ -122,6 +202,8 @@ export async function runDeployCommand(options: DeployCommandOptions): Promise<v
       config.project.subdomain,
     );
   }
+
+  plan = await enrichAndPrintDnsStatus(plan, config);
 
   if (!options.yes) {
     const settings = await promptDeploySettings({

@@ -1,7 +1,8 @@
 import { cdn } from 'tencentcloud-sdk-nodejs';
 import type { GlobalConfig } from '../config/schema.js';
 import { buildCdnVerifyRecord, formatCdnVerifyRecordMessage } from '../validate/domain.js';
-import { checkTxtRecord, type TxtDnsCheckResult } from './txt-dns-check.js';
+import { getDnsZoneDetails } from '../dns/dns-manager.js';
+import { checkTxtRecord, resolveNameserverIps, type TxtDnsCheckResult } from './txt-dns-check.js';
 import { ensureTxtRecord } from '../dns/dns-manager.js';
 import { retry } from '../utils/retry.js';
 
@@ -12,6 +13,8 @@ export interface CdnSetupOptions {
   cosOriginPath: string;
   config: GlobalConfig;
   managedDns?: boolean;
+  /** DNSPod 解析区域（managedDns 为 true 时用于自动 TXT 验证） */
+  dnsZone?: string;
   onVerificationRequired?: CdnVerificationHandler;
 }
 
@@ -156,17 +159,57 @@ async function autoVerifyWithDnsPod(
   domain: string,
   record: CdnVerifyRecord,
   config: GlobalConfig,
-): Promise<boolean> {
-  await ensureTxtRecord({ host: record.host, value: record.value, config });
+  dnsZone: string,
+): Promise<void> {
+  const zoneDetails = await getDnsZoneDetails(config, dnsZone);
 
-  for (let attempt = 0; attempt < 5; attempt++) {
-    await sleep(attempt === 0 ? 10000 : 5000);
+  if (!zoneDetails.effective) {
+    throw new CdnVerificationError(
+      record,
+      [
+        `域名 ${domain} 虽在 DNSPod 账户中，但当前 NS 未指向 DNSPod，无法自动完成 TXT 验证。`,
+        `实际 NS: ${zoneDetails.actualNs.join(', ') || '(未检测到)'}`,
+        `请改为 DNSPod NS: ${zoneDetails.dnspodNs.join(', ') || '(请在 DNSPod 控制台查看)'}`,
+        '或在当前 DNS 服务商手动添加 _cdnauth TXT 记录。',
+      ].join('\n'),
+    );
+  }
+
+  await ensureTxtRecord({ host: record.host, value: record.value, config, dnsZone });
+
+  const nameservers =
+    zoneDetails.actualNs.length > 0 ? zoneDetails.actualNs : zoneDetails.dnspodNs;
+  const resolverServers = await resolveNameserverIps(nameservers);
+
+  const maxAttempts = 24;
+  const intervalMs = 5000;
+  let lastDnsMessage = '';
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await sleep(attempt === 0 ? 5000 : intervalMs);
+
     if (await tryVerifyDomain(client, domain)) {
-      return true;
+      return;
+    }
+
+    const dnsCheck = await checkTxtRecord(record.fqdn, record.value, { resolverServers });
+    lastDnsMessage = dnsCheck.message;
+
+    if (dnsCheck.ok && (await tryVerifyDomain(client, domain))) {
+      return;
     }
   }
 
-  return false;
+  throw new CdnVerificationError(
+    record,
+    [
+      `域名 ${domain} 已在 DNSPod 账户 (${dnsZone}) 下，但 CDN 归属验证未在约 2 分钟内完成。`,
+      `DNS 状态: ${lastDnsMessage}`,
+      `生效 NS: ${zoneDetails.actualNs.join(', ') || zoneDetails.dnspodNs.join(', ') || '(未知)'}`,
+      '请确认子账号已授予 DNSPod CreateTXTRecord/ModifyTXTRecord 与 CDN VerifyDomainRecord 权限，',
+      '或检查 _cdnauth TXT 记录是否被其他解析覆盖后重试。',
+    ].join('\n'),
+  );
 }
 
 async function ensureDomainVerified(
@@ -175,6 +218,7 @@ async function ensureDomainVerified(
   config: GlobalConfig,
   options: {
     managedDns: boolean;
+    dnsZone?: string;
     onVerificationRequired?: CdnVerificationHandler;
   },
 ): Promise<void> {
@@ -184,11 +228,9 @@ async function ensureDomainVerified(
 
   let record = await fetchVerifyRecord(client, domain);
 
-  if (options.managedDns) {
-    const verified = await autoVerifyWithDnsPod(client, domain, record, config);
-    if (verified) {
-      return;
-    }
+  if (options.managedDns && options.dnsZone) {
+    await autoVerifyWithDnsPod(client, domain, record, config, options.dnsZone);
+    return;
   }
 
   if (options.onVerificationRequired) {
@@ -213,7 +255,14 @@ async function ensureDomainVerified(
 }
 
 export async function ensureCdnDomain(options: CdnSetupOptions): Promise<CdnSetupResult> {
-  const { domain, cosOriginPath, config, managedDns = true, onVerificationRequired } = options;
+  const {
+    domain,
+    cosOriginPath,
+    config,
+    managedDns = true,
+    dnsZone,
+    onVerificationRequired,
+  } = options;
   const client = createCdnClient(config);
   const originPath = cosOriginPath.replace(/\/$/, '');
 
@@ -223,6 +272,7 @@ export async function ensureCdnDomain(options: CdnSetupOptions): Promise<CdnSetu
   if (!existing) {
     await ensureDomainVerified(client, domain, config, {
       managedDns,
+      dnsZone,
       onVerificationRequired,
     });
     await retry(() =>

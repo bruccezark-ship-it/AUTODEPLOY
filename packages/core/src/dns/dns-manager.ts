@@ -1,5 +1,12 @@
 import { dnspod } from 'tencentcloud-sdk-nodejs';
 import type { GlobalConfig } from '../config/schema.js';
+import {
+  computeDnsHost,
+  getRootDomain,
+  normalizeDomain,
+  type DeployPlan,
+} from '../validate/domain.js';
+import { isDnsPodNsEffective, isDomainNotManagedError, matchesTxtRecordValue } from './dns-zone.js';
 import { retry } from '../utils/retry.js';
 
 type DnsClient = InstanceType<typeof dnspod.v20210323.Client>;
@@ -8,6 +15,8 @@ export interface DnsSetupOptions {
   subdomain: string;
   cnameTarget: string;
   config: GlobalConfig;
+  /** DNSPod 解析区域，默认 config.dns.domain */
+  dnsZone?: string;
 }
 
 export interface DnsSetupResult {
@@ -25,6 +34,126 @@ function createDnsClient(config: GlobalConfig): DnsClient {
       httpProfile: { endpoint: 'dnspod.tencentcloudapi.com' },
     },
   });
+}
+
+function resolveDnsZone(config: GlobalConfig, dnsZone?: string): string {
+  return normalizeDomain(dnsZone ?? config.dns.domain);
+}
+
+function isDomainNotFoundError(error: unknown): boolean {
+  return isDomainNotManagedError(error);
+}
+
+/** 检测根域名是否在当前腾讯云 DNSPod 账户下 */
+export async function isDnsZoneInAccount(
+  config: GlobalConfig,
+  zone: string,
+): Promise<boolean> {
+  const details = await getDnsZoneDetails(config, zone);
+  return details.inAccount;
+}
+
+export interface DnsZoneDetails {
+  inAccount: boolean;
+  effective: boolean;
+  actualNs: string[];
+  dnspodNs: string[];
+  grade?: string;
+  dnsStatus?: string;
+}
+
+export async function getDnsZoneDetails(
+  config: GlobalConfig,
+  zone: string,
+): Promise<DnsZoneDetails> {
+  const client = createDnsClient(config);
+  const normalizedZone = resolveDnsZone(config, zone);
+
+  try {
+    const result = await client.DescribeDomain({ Domain: normalizedZone });
+    const info = result.DomainInfo;
+
+    if (!info) {
+      return { inAccount: false, effective: false, actualNs: [], dnspodNs: [] };
+    }
+
+    const actualNs = info.ActualNsList ?? [];
+    const dnspodNs = info.DnspodNsList ?? [];
+
+    return {
+      inAccount: true,
+      effective: isDnsPodNsEffective(actualNs, dnspodNs),
+      actualNs,
+      dnspodNs,
+      grade: info.Grade,
+      dnsStatus: info.DnsStatus,
+    };
+  } catch (error) {
+    if (isDomainNotFoundError(error)) {
+      return { inAccount: false, effective: false, actualNs: [], dnspodNs: [] };
+    }
+    throw error;
+  }
+}
+
+/** 根据 DNSPod 账户归属更新发布计划中的 managedDns / dnsZone / dnsHost */
+export async function enrichDeployPlanDns(
+  plan: DeployPlan,
+  config: GlobalConfig,
+): Promise<DeployPlan> {
+  const zoneCache = new Map<string, DnsZoneDetails>();
+
+  const domains = await Promise.all(
+    plan.domains.map(async (entry) => {
+      const dnsZone = getRootDomain(entry.fullDomain);
+
+      let details = zoneCache.get(dnsZone);
+      if (!details) {
+        details = await getDnsZoneDetails(config, dnsZone);
+        zoneCache.set(dnsZone, details);
+      }
+
+      if (details.inAccount && details.effective) {
+        return {
+          ...entry,
+          managedDns: true,
+          dnsZone,
+          dnsHost: computeDnsHost(entry.fullDomain, dnsZone),
+        };
+      }
+
+      return {
+        ...entry,
+        managedDns: false,
+        dnsZone,
+        dnsHost: entry.fullDomain,
+      };
+    }),
+  );
+
+  return { ...plan, domains };
+}
+
+export async function resolveDnsTargetForDomain(
+  fullDomain: string,
+  config: GlobalConfig,
+): Promise<{ dnsHost: string; managedDns: boolean; dnsZone: string }> {
+  const dnsZone = getRootDomain(normalizeDomain(fullDomain));
+  const details = await getDnsZoneDetails(config, dnsZone);
+
+  if (details.inAccount && details.effective) {
+    return {
+      managedDns: true,
+      dnsZone,
+      dnsHost: computeDnsHost(fullDomain, dnsZone),
+    };
+  }
+
+  return {
+    managedDns: false,
+    dnsZone,
+    dnsHost: fullDomain,
+  };
 }
 
 function normalizeCname(value: string): string {
@@ -86,6 +215,8 @@ export interface TxtRecordSetupOptions {
   host: string;
   value: string;
   config: GlobalConfig;
+  /** DNSPod 解析区域，默认 config.dns.domain */
+  dnsZone?: string;
 }
 
 async function findTxtRecord(client: DnsClient, domain: string, host: string) {
@@ -105,51 +236,115 @@ async function findTxtRecord(client: DnsClient, domain: string, host: string) {
   return undefined;
 }
 
+async function resolveDefaultRecordLine(
+  client: DnsClient,
+  domain: string,
+  domainGrade: string | undefined,
+  fallbackLine: string,
+): Promise<{ recordLine: string; recordLineId?: string }> {
+  const gradesToTry = [...new Set([domainGrade, 'DP_FREE', 'D_FREE'].filter(Boolean))] as string[];
+
+  for (const grade of gradesToTry) {
+    try {
+      const result = await client.DescribeRecordLineList({
+        Domain: domain,
+        DomainGrade: grade,
+      });
+
+      const line = result.LineList?.find(
+        (item) => item.LineId === '0' || item.Name === '默认' || item.Name === 'Default',
+      );
+
+      if (line) {
+        return { recordLine: line.Name, recordLineId: line.LineId };
+      }
+    } catch {
+      // try next grade
+    }
+  }
+
+  return { recordLine: fallbackLine, recordLineId: '0' };
+}
+
+async function waitForTxtRecordInDnsPod(
+  client: DnsClient,
+  domain: string,
+  host: string,
+  expectedValue: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const existing = await findTxtRecord(client, domain, host);
+    if (matchesTxtRecordValue(existing?.Value, expectedValue)) {
+      return;
+    }
+
+    if (attempt < 7) {
+      await sleep(3000);
+    }
+  }
+
+  throw new Error(
+    `DNSPod 中未找到 TXT 记录 ${host}.${domain}。请确认子账号拥有 CreateTXTRecord/ModifyTXTRecord 权限，且域名解析区域状态正常。`,
+  );
+}
+
 export async function ensureTxtRecord(options: TxtRecordSetupOptions): Promise<DnsSetupResult> {
-  const { host, value, config } = options;
+  const { host, value, config, dnsZone } = options;
   const client = createDnsClient(config);
-  const domain = config.dns.domain;
+  const domain = resolveDnsZone(config, dnsZone);
   const normalizedValue = value.replace(/^"|"$/g, '');
+
+  const domainInfo = await client.DescribeDomain({ Domain: domain });
+  const recordLine = await resolveDefaultRecordLine(
+    client,
+    domain,
+    domainInfo.DomainInfo?.Grade,
+    config.dns.recordLine,
+  );
 
   const existing = await findTxtRecord(client, domain, host);
 
-  if (existing?.Value && existing.Value.replace(/^"|"$/g, '') === normalizedValue) {
+  if (existing?.Value && matchesTxtRecordValue(existing.Value, normalizedValue)) {
     return { action: 'skipped', recordId: existing.RecordId };
   }
 
   if (existing?.RecordId != null) {
     await retry(() =>
-      client.ModifyRecord({
+      client.ModifyTXTRecord({
         Domain: domain,
         RecordId: existing.RecordId!,
         SubDomain: host,
-        RecordType: 'TXT',
-        RecordLine: config.dns.recordLine,
+        RecordLine: recordLine.recordLine,
+        RecordLineId: recordLine.recordLineId,
         Value: normalizedValue,
         TTL: config.dns.ttl,
+        Status: 'ENABLE',
       }),
     );
+    await waitForTxtRecordInDnsPod(client, domain, host, normalizedValue);
     return { action: 'updated', recordId: existing.RecordId };
   }
 
   const result = await retry(() =>
-    client.CreateRecord({
+    client.CreateTXTRecord({
       Domain: domain,
       SubDomain: host,
-      RecordType: 'TXT',
-      RecordLine: config.dns.recordLine,
+      RecordLine: recordLine.recordLine,
+      RecordLineId: recordLine.recordLineId,
       Value: normalizedValue,
       TTL: config.dns.ttl,
+      Status: 'ENABLE',
     }),
   );
 
+  await waitForTxtRecordInDnsPod(client, domain, host, normalizedValue);
   return { action: 'created', recordId: result.RecordId };
 }
 
 export async function ensureCnameRecord(options: DnsSetupOptions): Promise<DnsSetupResult> {
-  const { subdomain, cnameTarget, config } = options;
+  const { subdomain, cnameTarget, config, dnsZone } = options;
   const client = createDnsClient(config);
-  const domain = config.dns.domain;
+  const domain = resolveDnsZone(config, dnsZone);
   const normalizedTarget = normalizeCname(cnameTarget);
 
   const existing = await findCnameRecord(client, domain, subdomain);
@@ -196,10 +391,11 @@ export interface DnsRemoveResult {
 export async function removeCnameRecord(options: {
   subdomain: string;
   config: GlobalConfig;
+  dnsZone?: string;
 }): Promise<DnsRemoveResult> {
-  const { subdomain, config } = options;
+  const { subdomain, config, dnsZone } = options;
   const client = createDnsClient(config);
-  const domain = config.dns.domain;
+  const domain = resolveDnsZone(config, dnsZone);
 
   const existing = await findCnameRecord(client, domain, subdomain);
   if (!existing?.RecordId) {

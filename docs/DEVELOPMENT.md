@@ -468,8 +468,13 @@ PurgeUrlsCache
 **DNSPod：**
 
 ```
-CreateRecord, ModifyRecord, DescribeRecordList, DeleteRecord
+DescribeDomain, DescribeDomainList, DescribeRecordList
+CreateRecord, ModifyRecord, DeleteRecord
 ```
+
+> 账户内域名自动 CDN 归属验证依赖：`DescribeDomain`（检测域名是否在账户下）、`CreateRecord`/`ModifyRecord`（写入 `_cdnauth` TXT）、`CreateVerifyRecord`/`VerifyDomainRecord`（CDN 验证）。
+
+完整 CAM 策略示例见 [docs/cam-policy.example.json](cam-policy.example.json)。
 
 ### 8.2 密钥安全
 

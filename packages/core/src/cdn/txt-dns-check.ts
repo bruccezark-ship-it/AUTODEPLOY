@@ -1,4 +1,4 @@
-import { resolveTxt } from 'node:dns/promises';
+import { Resolver, resolve4 } from 'node:dns/promises';
 
 export interface TxtDnsCheckResult {
   ok: boolean;
@@ -12,14 +12,37 @@ function normalizeTxtValue(value: string): string {
   return value.replace(/^"|"$/g, '').trim();
 }
 
+export async function resolveNameserverIps(nameservers: string[]): Promise<string[]> {
+  const ips: string[] = [];
+
+  for (const nameserver of nameservers) {
+    const host = nameserver.replace(/\.$/, '');
+    if (!host) continue;
+
+    try {
+      ips.push(...(await resolve4(host)));
+    } catch {
+      // ignore unresolved NS
+    }
+  }
+
+  return ips.length > 0 ? ips : ['119.29.29.29', '8.8.8.8', '1.1.1.1'];
+}
+
 export async function checkTxtRecord(
   fqdn: string,
   expectedValue: string,
+  options?: { resolverServers?: string[] },
 ): Promise<TxtDnsCheckResult> {
   const expected = normalizeTxtValue(expectedValue);
 
   try {
-    const records = await resolveTxt(fqdn);
+    const resolver = new Resolver();
+    if (options?.resolverServers?.length) {
+      resolver.setServers(options.resolverServers);
+    }
+
+    const records = await resolver.resolveTxt(fqdn);
     const found = records.map((parts) => normalizeTxtValue(parts.join('')));
     const ok = found.includes(expected);
 

@@ -7,6 +7,7 @@ import {
   resolveSubdomainTarget,
   buildVerifyRecordFqdn,
   getRootDomain,
+  computeDnsHost,
   expandCdnDomains,
   resolveDeployPlan,
   resolveCosPrefixFromDomain,
@@ -131,6 +132,20 @@ describe('buildVerifyRecordFqdn', () => {
 
   it('uses root domain for nested subdomain', () => {
     expect(buildVerifyRecordFqdn('app.staging.example.com')).toBe('_cdnauth.example.com');
+  });
+});
+
+describe('computeDnsHost', () => {
+  it('returns @ for apex domain', () => {
+    expect(computeDnsHost('hbshibo.com', 'hbshibo.com')).toBe('@');
+  });
+
+  it('returns www for www subdomain', () => {
+    expect(computeDnsHost('www.hbshibo.com', 'hbshibo.com')).toBe('www');
+  });
+
+  it('returns nested host for multi-level subdomain', () => {
+    expect(computeDnsHost('app.staging.example.com', 'example.com')).toBe('app.staging');
   });
 });
 
