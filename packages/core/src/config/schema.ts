@@ -85,4 +85,5 @@ export interface DeployOptions {
   onStepStart?: (step: number, total: number, name: string) => void;
   onStepComplete?: (step: number, total: number, name: string, message: string) => void;
   onCdnVerificationRequired?: CdnVerificationHandler;
+  onStatus?: (message: string) => void;
 }

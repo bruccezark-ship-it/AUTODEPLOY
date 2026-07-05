@@ -15,7 +15,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "setup-bucket": "tsx scripts/setup-bucket.ts"
+    "setup-bucket": "tsx scripts/setup-bucket.ts",
+    "setup-browser": "playwright-core install chromium"
   },
   "dependencies": {
     "cos-nodejs-sdk-v5": "^2.14.6",

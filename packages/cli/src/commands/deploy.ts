@@ -303,6 +303,9 @@ export async function runDeployCommand(options: DeployCommandOptions): Promise<v
         onStepComplete: (step, _total, _name, message) => {
           spinners.get(step)?.succeed(message);
         },
+        onStatus: (message) => {
+          console.log(chalk.cyan(`  ${message}`));
+        },
       },
     );
 

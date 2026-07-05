@@ -12,6 +12,7 @@ export interface GenerateSeoOptions {
   routeFile: string;
   outDir: string;
   baseUrl: string;
+  onStatus?: (message: string) => void;
 }
 
 export interface GenerateSeoResult {
@@ -94,6 +95,7 @@ async function resolveRouteHtmlMap(
   projectRoot: string,
   outDir: string,
   routes: string[],
+  onStatus?: (message: string) => void,
 ): Promise<{ htmlByRoute: Map<string, string>; renderedWithBrowser: boolean }> {
   const needsBrowser = routes.some((route) => route !== '/' && !hasDedicatedHtml(outDir, route));
 
@@ -115,6 +117,7 @@ async function resolveRouteHtmlMap(
     const htmlByRoute = await renderRoutePages({
       serverUrl: server.url,
       routes,
+      onStatus,
     });
     return { htmlByRoute, renderedWithBrowser: true };
   } finally {
@@ -139,6 +142,7 @@ export async function generateSeoArtifacts(options: GenerateSeoOptions): Promise
     projectRoot,
     outDir,
     routes,
+    options.onStatus,
   );
 
   const mdFiles: string[] = [];

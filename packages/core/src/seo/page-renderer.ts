@@ -1,28 +1,5 @@
-import type { Browser, Page } from 'playwright-core';
-
-type ChromiumModule = {
-  launch: (options: Record<string, unknown>) => Promise<Browser>;
-};
-
-const BROWSER_CHANNELS = ['msedge', 'chrome', 'chrome-beta'] as const;
-
-async function launchBrowser(chromium: ChromiumModule): Promise<Browser> {
-  for (const channel of BROWSER_CHANNELS) {
-    try {
-      return await chromium.launch({ channel, headless: true });
-    } catch {
-      // try next channel
-    }
-  }
-
-  try {
-    return await chromium.launch({ headless: true });
-  } catch {
-    throw new Error(
-      '无法启动浏览器以抓取 SPA 页面内容。请安装 Chrome/Edge，或执行: npx playwright install chromium',
-    );
-  }
-}
+import type { Page } from 'playwright-core';
+import { launchHeadlessBrowser } from './browser-launcher.js';
 
 function buildLocalUrl(serverUrl: string, routePath: string): string {
   const base = serverUrl.replace(/\/$/, '');
@@ -47,9 +24,10 @@ async function waitForPageContent(page: Page): Promise<void> {
 export async function renderRoutePages(options: {
   serverUrl: string;
   routes: string[];
+  onStatus?: (message: string) => void;
 }): Promise<Map<string, string>> {
   const { chromium } = await import('playwright-core');
-  const browser = await launchBrowser(chromium as ChromiumModule);
+  const browser = await launchHeadlessBrowser(chromium, { onStatus: options.onStatus });
   const page = await browser.newPage();
   const results = new Map<string, string>();
 

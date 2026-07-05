@@ -34,6 +34,7 @@ export async function deploy(
       routeFile,
       outDir,
       baseUrl: siteBaseUrl,
+      onStatus: options.onStatus,
     });
     buildMessage += seoResult.renderedWithBrowser
       ? `; 已生成 sitemap.xml、robots.txt 及 ${seoResult.mdFiles.length} 个 html.md（浏览器渲染抓取）`
