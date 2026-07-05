@@ -46,11 +46,19 @@ export const projectConfigSchema = z.object({
   outputDir: z.string().optional(),
   basePath: z.string().default('/'),
   cleanRemote: z.boolean().default(true),
+  crawlMaxPages: z.number().int().positive().default(50),
+  crawlMaxDepth: z.number().int().positive().default(1),
 });
 
 export type GlobalConfig = z.infer<typeof globalConfigSchema>;
 export type ProjectConfig = z.infer<typeof projectConfigSchema>;
 export type DeployConfig = GlobalConfig & { project: ProjectConfig };
+
+export type ResolvedRouteSource =
+  | { kind: 'file'; path: string }
+  | { kind: 'pages'; dir: string; files: string[] }
+  | { kind: 'routes'; routes: string[] }
+  | { kind: 'crawl' };
 
 export interface DeployContext {
   projectRoot: string;
@@ -59,7 +67,6 @@ export interface DeployContext {
   config: DeployConfig;
   outDir: string;
   siteBaseUrl: string;
-  routeFile?: string;
 }
 
 export interface DeployCdnEntry {
@@ -77,11 +84,16 @@ export interface DeployResult {
 }
 
 import type { CdnVerificationHandler } from '../cdn/cdn-manager.js';
+import type { RouteDiscoveryOption } from '../routes/route-discovery.js';
 
 export interface DeployOptions {
   noClean?: boolean;
   /** 加速域名均已存在于 CDN 时，跳过 CDN 配置与 DNS 解析 */
   skipCdnAndDns?: boolean;
+  /** 非交互模式下自动选择路由表；交互模式下由 CLI 提供 */
+  onRouteDiscoverySelect?: (
+    options: RouteDiscoveryOption[],
+  ) => Promise<RouteDiscoveryOption | undefined>;
   onStepStart?: (step: number, total: number, name: string) => void;
   onStepComplete?: (step: number, total: number, name: string, message: string) => void;
   onCdnVerificationRequired?: CdnVerificationHandler;

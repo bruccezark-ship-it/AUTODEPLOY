@@ -8,6 +8,7 @@ import {
   buildVerifyRecordFqdn,
   getRootDomain,
   computeDnsHost,
+  resolveSiteBaseDomain,
   expandCdnDomains,
   resolveDeployPlan,
   resolveCosPrefixFromDomain,
@@ -96,6 +97,20 @@ describe('resolveCosPrefixFromDomain', () => {
       cosPrefix: 'sites/wocao/',
       sharedDomains: ['wocao.aigo1.cloud'],
     });
+  });
+});
+
+describe('resolveSiteBaseDomain', () => {
+  it('uses www for apex root domain input', () => {
+    expect(resolveSiteBaseDomain('hbshibo.com')).toBe('www.hbshibo.com');
+  });
+
+  it('keeps www when already provided', () => {
+    expect(resolveSiteBaseDomain('www.hbshibo.com')).toBe('www.hbshibo.com');
+  });
+
+  it('keeps subdomain unchanged', () => {
+    expect(resolveSiteBaseDomain('app.example.com')).toBe('app.example.com');
   });
 });
 

@@ -1,7 +1,7 @@
 import type { Page } from 'playwright-core';
 import { launchHeadlessBrowser } from './browser-launcher.js';
 
-function buildLocalUrl(serverUrl: string, routePath: string): string {
+export function buildLocalUrl(serverUrl: string, routePath: string): string {
   const base = serverUrl.replace(/\/$/, '');
   if (routePath === '/') {
     return `${base}/`;
@@ -9,7 +9,7 @@ function buildLocalUrl(serverUrl: string, routePath: string): string {
   return `${base}${routePath.startsWith('/') ? routePath : `/${routePath}`}`;
 }
 
-async function waitForPageContent(page: Page): Promise<void> {
+export async function waitForPageContent(page: Page): Promise<void> {
   await page.waitForLoadState('domcontentloaded').catch(() => undefined);
   await Promise.race([
     page.waitForLoadState('networkidle'),

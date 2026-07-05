@@ -113,6 +113,18 @@ export function expandCdnDomains(domain: string): string[] {
   return [normalized];
 }
 
+/** 根域名输入时 sitemap/robots 使用 www 前缀作为站点 URL */
+export function resolveSiteBaseDomain(inputDomain: string): string {
+  const normalized = normalizeDomain(inputDomain);
+  const root = getRootDomain(normalized);
+
+  if (normalized === root) {
+    return `www.${root}`;
+  }
+
+  return normalized;
+}
+
 export function resolveDeployPlan(
   inputDomain: string,
   baseDomain: string,

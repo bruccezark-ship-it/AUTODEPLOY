@@ -7,6 +7,11 @@ import {
   resolveExistingCdnEntries,
 } from '../cdn/cdn-manager.js';
 import { ensureCnameRecord } from '../dns/dns-manager.js';
+import {
+  collectRouteDiscoveryResults,
+  pickDefaultRouteDiscoveryOption,
+  routeDiscoveryOptionToSeoInput,
+} from '../routes/route-discovery.js';
 import { generateSeoArtifacts } from '../seo/generator.js';
 import { ensureBucketWebsite, uploadDirectory } from '../uploader/cos-uploader.js';
 
@@ -14,7 +19,7 @@ export async function deploy(
   ctx: DeployContext,
   options: DeployOptions = {},
 ): Promise<DeployResult> {
-  const { config, projectRoot, domains, cosPrefix, outDir, routeFile, siteBaseUrl } = ctx;
+  const { config, projectRoot, domains, cosPrefix, outDir, siteBaseUrl } = ctx;
   const clean = options.noClean === true ? false : config.project.cleanRemote;
   const skipCdnAndDns = options.skipCdnAndDns === true;
   const totalSteps = skipCdnAndDns ? 2 : 4;
@@ -28,17 +33,33 @@ export async function deploy(
 
   let buildMessage = `构建完成 (${formatDuration(buildResult.duration)}, ${buildResult.fileCount} files)`;
 
-  if (routeFile) {
+  const discoveryOptions = await collectRouteDiscoveryResults({
+    projectRoot,
+    outDir,
+    config,
+    onStatus: options.onStatus,
+  });
+
+  let selectedOption =
+    discoveryOptions.length === 1
+      ? discoveryOptions[0]
+      : options.onRouteDiscoverySelect
+        ? await options.onRouteDiscoverySelect(discoveryOptions)
+        : pickDefaultRouteDiscoveryOption(discoveryOptions, config.project.routeFile);
+
+  if (selectedOption) {
     const seoResult = await generateSeoArtifacts({
       projectRoot,
-      routeFile,
       outDir,
       baseUrl: siteBaseUrl,
       onStatus: options.onStatus,
+      crawlMaxPages: config.project.crawlMaxPages,
+      crawlMaxDepth: config.project.crawlMaxDepth,
+      ...routeDiscoveryOptionToSeoInput(selectedOption),
     });
     buildMessage += seoResult.renderedWithBrowser
-      ? `; 已生成 sitemap.xml、robots.txt 及 ${seoResult.mdFiles.length} 个 html.md（浏览器渲染抓取）`
-      : `; 已生成 sitemap.xml、robots.txt 及 ${seoResult.mdFiles.length} 个 html.md`;
+      ? `; 已生成 sitemap.xml、robots.txt 及 ${seoResult.mdFiles.length} 个 html.md（${selectedOption.label}，浏览器渲染抓取）`
+      : `; 已生成 sitemap.xml、robots.txt 及 ${seoResult.mdFiles.length} 个 html.md（${selectedOption.label}）`;
   }
 
   options.onStepComplete?.(

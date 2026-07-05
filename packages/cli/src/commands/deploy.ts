@@ -10,6 +10,7 @@ import {
   validateDomain,
   resolveDeployPlan,
   resolveSubdomainPlan,
+  resolveSiteBaseDomain,
   expandCdnDomains,
   normalizeDomain,
   enrichDeployPlanDns,
@@ -28,7 +29,7 @@ import {
 } from '../prompts/deploy-target.js';
 import { promptDeploySettings } from '../prompts/deploy-settings.js';
 import { runCdnVerificationFlow } from '../prompts/cdn-verification.js';
-import { resolveRouteFileForDeploy } from '../prompts/route-file.js';
+import { promptRouteDiscoverySelection } from '../prompts/route-source.js';
 
 export interface DeployCommandOptions {
   subdomain?: string;
@@ -267,12 +268,10 @@ export async function runDeployCommand(options: DeployCommandOptions): Promise<v
 
   console.log();
 
-  const routeFile = await resolveRouteFileForDeploy({
-    projectRoot: cwd,
-    configuredRouteFile: config.project.routeFile,
-    yes: options.yes,
-  });
-  const siteBaseUrl = `${config.domain.protocol}://${plan.primaryDomain}`;
+  const siteBaseDomain = inputDomain
+    ? resolveSiteBaseDomain(inputDomain)
+    : resolveSiteBaseDomain(plan.primaryDomain);
+  const siteBaseUrl = `${config.domain.protocol}://${siteBaseDomain}`;
 
   const spinners = new Map<number, ReturnType<typeof ora>>();
 
@@ -285,11 +284,15 @@ export async function runDeployCommand(options: DeployCommandOptions): Promise<v
         config,
         outDir,
         siteBaseUrl,
-        routeFile,
       },
       {
         noClean: options.noClean,
         skipCdnAndDns,
+        onRouteDiscoverySelect: async (discoveryOptions) =>
+          promptRouteDiscoverySelection(discoveryOptions, {
+            yes: options.yes,
+            configuredRouteFile: config.project.routeFile,
+          }),
         onCdnVerificationRequired: options.yes || skipCdnAndDns
           ? undefined
           : async (verificationCtx) => {
