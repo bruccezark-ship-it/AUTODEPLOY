@@ -75,6 +75,22 @@ export async function resolveOutDir(
   return join(projectRoot, 'dist');
 }
 
+/** 读取 vite.config 中的 base 路径 */
+export async function resolveViteBasePath(projectRoot: string): Promise<string> {
+  for (const configFile of VITE_CONFIG_FILES) {
+    const configPath = join(projectRoot, configFile);
+    if (!existsSync(configPath)) continue;
+
+    const content = await readFile(configPath, 'utf-8');
+    const baseMatch = content.match(/base\s*:\s*['"`]([^'"`]+)['"`]/);
+    if (baseMatch) {
+      return baseMatch[1];
+    }
+  }
+
+  return '/';
+}
+
 type PackageJson = {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;

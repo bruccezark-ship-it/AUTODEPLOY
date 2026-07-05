@@ -28,6 +28,7 @@ import {
 } from '../prompts/deploy-target.js';
 import { promptDeploySettings } from '../prompts/deploy-settings.js';
 import { runCdnVerificationFlow } from '../prompts/cdn-verification.js';
+import { resolveRouteFileForDeploy } from '../prompts/route-file.js';
 
 export interface DeployCommandOptions {
   subdomain?: string;
@@ -266,6 +267,13 @@ export async function runDeployCommand(options: DeployCommandOptions): Promise<v
 
   console.log();
 
+  const routeFile = await resolveRouteFileForDeploy({
+    projectRoot: cwd,
+    configuredRouteFile: config.project.routeFile,
+    yes: options.yes,
+  });
+  const siteBaseUrl = `${config.domain.protocol}://${plan.primaryDomain}`;
+
   const spinners = new Map<number, ReturnType<typeof ora>>();
 
   try {
@@ -276,6 +284,8 @@ export async function runDeployCommand(options: DeployCommandOptions): Promise<v
         domains: plan.domains,
         config,
         outDir,
+        siteBaseUrl,
+        routeFile,
       },
       {
         noClean: options.noClean,

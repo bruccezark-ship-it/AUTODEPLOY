@@ -7,13 +7,14 @@ import {
   resolveExistingCdnEntries,
 } from '../cdn/cdn-manager.js';
 import { ensureCnameRecord } from '../dns/dns-manager.js';
+import { generateSeoArtifacts } from '../seo/generator.js';
 import { ensureBucketWebsite, uploadDirectory } from '../uploader/cos-uploader.js';
 
 export async function deploy(
   ctx: DeployContext,
   options: DeployOptions = {},
 ): Promise<DeployResult> {
-  const { config, projectRoot, domains, cosPrefix, outDir } = ctx;
+  const { config, projectRoot, domains, cosPrefix, outDir, routeFile, siteBaseUrl } = ctx;
   const clean = options.noClean === true ? false : config.project.cleanRemote;
   const skipCdnAndDns = options.skipCdnAndDns === true;
   const totalSteps = skipCdnAndDns ? 2 : 4;
@@ -24,11 +25,26 @@ export async function deploy(
     command: config.project.buildCommand,
     outDir,
   });
+
+  let buildMessage = `构建完成 (${formatDuration(buildResult.duration)}, ${buildResult.fileCount} files)`;
+
+  if (routeFile) {
+    const seoResult = await generateSeoArtifacts({
+      projectRoot,
+      routeFile,
+      outDir,
+      baseUrl: siteBaseUrl,
+    });
+    buildMessage += seoResult.renderedWithBrowser
+      ? `; 已生成 sitemap.xml、robots.txt 及 ${seoResult.mdFiles.length} 个 html.md（浏览器渲染抓取）`
+      : `; 已生成 sitemap.xml、robots.txt 及 ${seoResult.mdFiles.length} 个 html.md`;
+  }
+
   options.onStepComplete?.(
     1,
     totalSteps,
     '构建项目',
-    `构建完成 (${formatDuration(buildResult.duration)}, ${buildResult.fileCount} files)`,
+    buildMessage,
   );
 
   let cdnEntries;

@@ -41,6 +41,7 @@ export const globalConfigSchema = z.object({
 
 export const projectConfigSchema = z.object({
   subdomain: z.string().optional(),
+  routeFile: z.string().optional(),
   buildCommand: z.string().default('vite build'),
   outputDir: z.string().optional(),
   basePath: z.string().default('/'),
@@ -57,6 +58,8 @@ export interface DeployContext {
   domains: DeployDomainEntry[];
   config: DeployConfig;
   outDir: string;
+  siteBaseUrl: string;
+  routeFile?: string;
 }
 
 export interface DeployCdnEntry {
