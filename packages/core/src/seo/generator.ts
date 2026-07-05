@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveViteBasePath } from '../detector/vite-project.js';
@@ -43,13 +43,14 @@ function routeToPageUrl(baseUrl: string, routePath: string): string {
   return `${normalizeBaseUrl(baseUrl)}${routePath}`;
 }
 
+/** 根据路由生成 LLM 友好的 md 文件名，如 / → index.md，/contacts → contacts.md */
 export function routeToMdFileName(routePath: string): string {
   if (routePath === '/') {
-    return 'index.html.md';
+    return 'index.md';
   }
 
   const segment = routePath.replace(/^\//, '').replace(/\/$/, '');
-  return `${segment.replace(/\//g, '-')}.html.md`;
+  return `${segment}.md`;
 }
 
 function buildSitemapXml(urls: string[]): string {
@@ -193,6 +194,7 @@ async function writeMarkdownFiles(
 
     const mdFileName = routeToMdFileName(route);
     const mdPath = join(outDir, mdFileName);
+    await mkdir(join(mdPath, '..'), { recursive: true });
     const pageUrl = routeToPageUrl(baseUrl, route);
     await writeFile(mdPath, htmlToLlmMarkdown(html, pageUrl, route), 'utf-8');
     mdFiles.push(mdFileName);

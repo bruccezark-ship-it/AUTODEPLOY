@@ -58,8 +58,8 @@ export async function deploy(
       ...routeDiscoveryOptionToSeoInput(selectedOption),
     });
     buildMessage += seoResult.renderedWithBrowser
-      ? `; 已生成 sitemap.xml、robots.txt 及 ${seoResult.mdFiles.length} 个 html.md（${selectedOption.label}，浏览器渲染抓取）`
-      : `; 已生成 sitemap.xml、robots.txt 及 ${seoResult.mdFiles.length} 个 html.md（${selectedOption.label}）`;
+      ? `; 已生成 sitemap.xml、robots.txt 及 ${seoResult.mdFiles.length} 个页面 md（${selectedOption.label}，浏览器渲染抓取）`
+      : `; 已生成 sitemap.xml、robots.txt 及 ${seoResult.mdFiles.length} 个页面 md（${selectedOption.label}）`;
   }
 
   options.onStepComplete?.(

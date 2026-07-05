@@ -46,7 +46,7 @@ export async function promptRouteDiscoverySelection(
   }
 
   return select({
-    message: '请选择用于生成 sitemap / robots / html.md 的路由表',
+    message: '请选择用于生成 sitemap / robots / 页面 md 的路由表',
     choices: options.map((option) => ({
       name: formatRouteDiscoverySummary(option),
       value: option,
